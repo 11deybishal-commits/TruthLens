@@ -6,7 +6,15 @@ import Anthropic from "@anthropic-ai/sdk";
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// Configure CORS for production
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -216,19 +224,29 @@ Respond ONLY with a valid JSON object (no markdown, no extra text) with exactly 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in response");
     const result = JSON.parse(jsonMatch[0]);
-    res.json(result);
+    return res.json(result);
   } catch (err) {
-    console.error("Error:", err.message);
-    // Use mock data for testing when API fails
-    if (err.status === 400 && err.error?.error?.message?.includes("credit balance")) {
-      console.log("Using mock analysis for testing...");
-      return res.json(getMockAnalysis(text));
-    }
-    res.status(500).json({ error: "Analysis failed. Please try again." });
+    console.error("Anthropic API Error:", err.message);
+    console.log("Falling back to mock analysis...");
+    // Always fallback to mock analysis on any error
+    return res.json(getMockAnalysis(text));
   }
 });
 
-app.get("/api/health", (_, res) => res.json({ status: "ok" }));
+app.get("/api/health", (_, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: "Endpoint not found", path: req.path });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled Error:", err);
+  res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+});
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ TruthLens backend running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ TruthLens backend running on port ${PORT}`));

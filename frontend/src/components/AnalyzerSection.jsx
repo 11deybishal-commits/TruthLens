@@ -160,17 +160,27 @@ export default function AnalyzerSection() {
     if (!text.trim() || text.length < 10) return
     setLoading(true); setResult(null); setError(null)
     try {
-      const res = await fetch('/api/analyze', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+      console.log('Analyzing with API URL:', apiUrl)
+      
+      const res = await fetch(`${apiUrl}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       })
+      
+      const contentType = res.headers.get('content-type')
+      if (!contentType?.includes('application/json')) {
+        throw new Error(`Backend returned non-JSON response. Status: ${res.status}. Make sure backend is running and CORS is configured.`)
+      }
+      
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setResult(data)
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
     } catch (e) {
-      setError(e.message)
+      console.error('Analysis Error:', e)
+      setError(e.message || 'Failed to connect to backend. Check console for details.')
     } finally {
       setLoading(false)
     }
