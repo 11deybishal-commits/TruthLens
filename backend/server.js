@@ -237,7 +237,15 @@ Respond ONLY with a valid JSON object (no markdown, no extra text) with exactly 
     }
   } catch (err) {
     console.error("Analysis endpoint error:", err);
-    return res - return JSON
+    return res.status(500).json({ error: "Analysis failed", details: err.message });
+  }
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// 404 handler - return JSON
 app.use((req, res) => {
   console.log(`404: ${req.method} ${req.path}`);
   res.status(404).json({ 
@@ -261,12 +269,4 @@ app.listen(PORT, () => {
   console.log(`🔗 Base URL: http://localhost:${PORT}`);
   console.log(`📝 Analyze: http://localhost:${PORT}/api/analyze (POST)`);
   console.log(`💓 Health: http://localhost:${PORT}/api/health (GET)`);
-}
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error("Unhandled Error:", err);
-  res.status(err.status || 500).json({ error: err.message || "Internal server error" });
 });
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ TruthLens backend running on port ${PORT}`));
