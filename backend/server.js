@@ -7,15 +7,15 @@ dotenv.config();
 
 const app = express();
 
-// Configure CORS for production
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*',
+// CORS - Allow all origins
+app.use(cors({
+  origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true
-};
-app.use(cors(corsOptions));
-app.use(express.json());
+  allowedHeaders: ['Content-Type']
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -181,21 +181,26 @@ function getMockAnalysis(text) {
   };
 }
 
+app.get("/", (req, res) => {
+  res.json({ message: "TruthLens Backend is Running!", version: "1.0", status: "operational" });
+});
+
 app.post("/api/analyze", async (req, res) => {
-  const { text } = req.body;
-
-  if (!text || text.trim().length < 10) {
-    return res.status(400).json({ error: "Please provide meaningful text to analyze." });
-  }
-
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-5",
-      max_tokens: 1500,
-      messages: [
-        {
-          role: "user",
-          content: `You are TruthLens, an expert misinformation analyst. Analyze the following news headline or article text for credibility, bias, and potential misinformation.
+    const { text } = req.body;
+
+    if (!text || text.trim().length < 10) {
+      return res.status(400).json({ error: "Please provide meaningful text to analyze." });
+    }
+
+    try {
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-5",
+        max_tokens: 1500,
+        messages: [
+          {
+            role: "user",
+            content: `You are TruthLens, an expert misinformation analyst. Analyze the following news headline or article text for credibility, bias, and potential misinformation.
 
 TEXT TO ANALYZE:
 "${text}"
@@ -216,32 +221,47 @@ Respond ONLY with a valid JSON object (no markdown, no extra text) with exactly 
   "recommendedAction": "<what the reader should do>",
   "writingTechniques": ["<manipulation technique used>", "<technique 2>"]
 }`
-        }
-      ]
-    });
+          }
+        ]
+      });
 
-    const raw = message.content[0].text.trim();
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
-    const result = JSON.parse(jsonMatch[0]);
-    return res.json(result);
+      const raw = message.content[0].text.trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("No JSON in response");
+      const result = JSON.parse(jsonMatch[0]);
+      return res.json(result);
+    } catch (apiErr) {
+      console.error("Anthropic API Error:", apiErr.message);
+      // Fallback to mock analysis
+      return res.json(getMockAnalysis(text));
+    }
   } catch (err) {
-    console.error("Anthropic API Error:", err.message);
-    console.log("Falling back to mock analysis...");
-    // Always fallback to mock analysis on any error
-    return res.json(getMockAnalysis(text));
-  }
-});
-
-app.get("/api/health", (_, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-// 404 handler
+    console.error("Analysis endpoint error:", err);
+    return res - return JSON
 app.use((req, res) => {
-  res.status(404).json({ error: "Endpoint not found", path: req.path });
+  console.log(`404: ${req.method} ${req.path}`);
+  res.status(404).json({ 
+    error: "Endpoint not found", 
+    path: req.path,
+    method: req.method,
+    availableEndpoints: ['/api/analyze', '/api/health', '/']
+  });
 });
 
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled Error:", err);
+  res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`✅ TruthLens Backend Running`);
+  console.log(`📡 Port: ${PORT}`);
+  console.log(`🔗 Base URL: http://localhost:${PORT}`);
+  console.log(`📝 Analyze: http://localhost:${PORT}/api/analyze (POST)`);
+  console.log(`💓 Health: http://localhost:${PORT}/api/health (GET)`);
+}
 // Global error handler
 app.use((err, req, res, next) => {
   console.error("Unhandled Error:", err);

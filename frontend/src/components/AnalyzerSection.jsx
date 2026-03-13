@@ -161,26 +161,39 @@ export default function AnalyzerSection() {
     setLoading(true); setResult(null); setError(null)
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-      console.log('Analyzing with API URL:', apiUrl)
+      const endpoint = `${apiUrl}/api/analyze`
+      console.log('Sending request to:', endpoint)
       
-      const res = await fetch(`${apiUrl}/api/analyze`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
       })
       
+      console.log('Response status:', res.status)
       const contentType = res.headers.get('content-type')
+      console.log('Content-Type:', contentType)
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      }
+      
       if (!contentType?.includes('application/json')) {
-        throw new Error(`Backend returned non-JSON response. Status: ${res.status}. Make sure backend is running and CORS is configured.`)
+        throw new Error(`Expected JSON but got ${contentType}. Backend may be down.`)
       }
       
       const data = await res.json()
+      console.log('Response data:', data)
+      
       if (data.error) throw new Error(data.error)
       setResult(data)
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
     } catch (e) {
-      console.error('Analysis Error:', e)
-      setError(e.message || 'Failed to connect to backend. Check console for details.')
+      console.error('Full Error:', e)
+      const msg = e.message.includes('Failed to fetch') 
+        ? `Can't reach backend at ${import.meta.env.VITE_API_URL}. Make sure it's running.`
+        : e.message
+      setError(msg)
     } finally {
       setLoading(false)
     }
